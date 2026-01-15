@@ -1,6 +1,10 @@
 Script Changes
 ==============
 
+## 2026-01-15 v0.7.0
+- Refactored code and added a `description.py` module which now more safely
+  houses static pimc description data. 
+
 ## 2026-01-12 v0.6.5
 - Fixed small bug in `merge.py` related to counting bins in cumulative averages
 

@@ -5,6 +5,8 @@ import re
 import glob
 from operator import itemgetter, attrgetter
 
+from .description import get_desc, EST_TYPE, CUM_EST_TYPE
+
 # ----------------------------------------------------------------------
 def get_reduce_name(par_map,est_name,pimcid=None,base_dir=None):
     # cL = [float(Lj) for Lj in par_map['Container Dimensions'].split('x')]
@@ -156,11 +158,7 @@ def getParameterMap(logName):
 # ----------------------------------------------------------------------
 def get_estimator_names(base_dir,pimcid,verbose=False):
     '''Return a list of estimator and log file names.'''
-    est_name = ['log', 'estimator', 'obdm', 'pair', 'pcycle', 'super', 'worm', 
-                'radial', 'radwind', 'radarea', 'planedensity',
-                'planewind', 'planearea','virial', 'linedensity',
-                'linepotential','energy','position','ssf','isf','ssfq',
-                'planeavedensity','planeaveVext','lineardensity']
+    est_name = ("log",) + EST_TYPE
 
     file_names = {}
     for est in est_name:
@@ -352,7 +350,6 @@ def get_pimcid(file_name):
         if os.path.sep in file_name:
             file_name = os.path.basename(file_name)
         file_name = os.path.splitext(file_name)[0]
-        # fParts = re.split(r'(?<=[a-zA-Z0-9_])-',file_name.rstrip('.dat'))
         fparts = file_name.split('-')
         if len(fparts) > 7:
             ID = '-'.join(fparts[-5:])
@@ -732,55 +729,10 @@ class PimcHelp:
             self.prefix='gce'
 
         # The data file and all output file names
-        self.dataType = ['estimator', 'obdm', 'pair', 'pcycle', 'super', 'worm', 
-                         'radial', 'radwind', 'radarea', 'planedensity',
-                         'planewind', 'planearea','virial', 'linedensity',
-                         'linepotential','energy','position','ssf','isf','ssfq', 
-                         'planeavedensity','planeaveVext','lineardensity']
-        if not canonical:
-            self.dataType.append('number')
+        self.dataType = list(EST_TYPE)
 
-    # -----------------------------------------------------------------------------
-    def getID(self,fileName): 
-        ''' Return the ID number corresponding to a given filename. '''
-        fParts = re.split(r'(?<=[a-zA-Z0-9_])-',fileName.rstrip('.dat'))
-        if len(fParts) > 7:
-            ID = '-'.join(fParts[6:])
-        else:
-            ID = fileName[-13:-4]
-        return ID
-
-    # ----------------------------------------------------------------------
-    def getParameterMap(self,logName): 
-        '''Given a log file name, return the parameter map. '''
-
-        # Get the values of all simulation parameters
-        paramsMap = {}
-        params = False
-        with open(logName, 'r') as logFile:
-            for line in logFile:
-                if 'Begin Simulation Parameters' in line:
-                    params = True
-                elif 'End Simulation Parameters' in line:
-                    break
-
-                if params and ':' in line:
-                    keyVal = line.split(':')
-                    paramsMap[keyVal[0].strip()] = keyVal[1].strip()
-
-        # Add an element to the parameter map for the linear dimension (Lz) of
-        # the container
-        paramsMap['Container Length'] = paramsMap['Container Dimensions'].split('x')[-1]
-
-        # fix a spelling error in some old log files
-        if 'Ensenble' in paramsMap: 
-            paramsMap['Ensemble'] = dictionary.pop('Ensenble')
-
-        # add a new key if it doesn't exist
-        if 'Specified Imaginary Time Step' not in paramsMap:
-            paramsMap['Specified Imaginary Time Step'] = paramsMap['Imaginary Time Step']
-
-        return paramsMap
+        if canonical:
+            self.dataType.remove('number')
 
     # -----------------------------------------------------------------------------
     def getSimulationParameters(self,idList=None): 
@@ -793,30 +745,9 @@ class PimcHelp:
         self.params = {}
         self.id = []
         for fname in fileNames:
-            ID = self.getID(fname)
+            ID = get_pimcid(fname)
             self.id.append(ID)
-            self.params[ID] = self.getParameterMap(fname)
-
-    # -----------------------------------------------------------------------------
-    # def getFileInfo(self,type):
-    #     ''' Get the names of the input files, how many of them there are, 
-    #         and how many columns of data they contain.'''
-
-    #     fileNames = self.getFileList(type)
-
-    #     # The number of parameter files
-    #     numParams = len(fileNames);
-
-    #     # Open a sample data file and count the number of columns
-    #     inFile = open(fileNames[0],'r')
-    #     lines = inFile.readlines();
-    #     for line in lines:
-    #         if not (line[0] == '#'):
-    #             cols = line.split()
-    #             break
-    #     numDataCols = len(cols)
-    #     
-    #     return fileNames,numParams,numDataCols
+            self.params[ID] = getParameterMap(fname)
 
     # -----------------------------------------------------------------------------
     def getFileList(self,ftype,idList=None,cyldir=""):
@@ -841,6 +772,10 @@ class PimcHelp:
 
         return sorted(fileNames)
 
+    # -----------------------------------------------------------------------------
+    def getID(self,fname):
+        return get_pimcid(fname)
+
 # -------------------------------------------------------------------------------
 # CLASS SCALAR REDUCE
 # -------------------------------------------------------------------------------
@@ -862,7 +797,7 @@ class ScalarReduce:
         self.param_ = {}
 
         # Parameter and estimator name descriptions
-        self.descrip = Description()
+        self.descrip = get_desc()
 
         # Determine the reduction variable and get its values
         self.reduceLabel = fileNames[0].partition('reduce')[0][-2]
@@ -988,7 +923,7 @@ class VectorReduce:
         self.param_ = {}
 
         # Parameter and estimator name descriptions
-        self.descrip = Description()
+        self.descrip = get_desc()
 
         # Determine the reduction variable and get its values
         self.reduceLabel = fileNames[0].partition('reduce')[0][-2]
@@ -1067,11 +1002,6 @@ class VectorReduce:
         '''Return the independent parameter over which we are reducing. '''
         return self.param_[self.reduceLabel]
 
-#    # ----------------------------------------------------------------------
-#    def varParam(self):
-#        '''Return the variable parameter array. '''
-#        return self.param_[self.reduceLabel]
-
     # ----------------------------------------------------------------------
     def x(self,varIndex,reduceIndex):
         ''' Return the independent vector variable.
@@ -1102,7 +1032,6 @@ class VectorReduce:
 
         return self.estimator_[varIndex,:,3*reduceIndex+2]
 
-
     # ----------------------------------------------------------------------
     def getReduceLabel(self,reduceIndex):
         '''Construct a label for the reduce parameter.'''
@@ -1124,128 +1053,3 @@ class VectorReduce:
         labUnit = self.descrip.paramUnit[self.varLabel]
 
         return labName + ' = ' + labFormat % labValue + ' ' + labUnit
-
-
-# -------------------------------------------------------------------------------
-# CLASS DESCRIPTION
-# -------------------------------------------------------------------------------
-class Description:
-    '''A class which holds descriptions of all the variables used in the path
-    ingegral simulations.'''
-
-    # ----------------------------------------------------------------------
-    def __init__(self,NDIM=3):
-        ''' Defines all maps and dictionaries used in the analysis.'''
-
-        lengthTUnit = r'$[\mathrm{\AA}]$'
-        lengthUnit = r'$\mathrm{\AA}$'
-
-        # The name for the density dependent on the dimensionality
-        densityName = ['Line', 'Area', 'Volume']
-
-        self.paramNames = ['T','V','u','t','N','n','R','L','M']
-
-        self.paramShortName = {'T':'T',
-                               'V':'V',
-                               'M':'M',
-                               'u':r'$\mu$',
-                               't':r'$\tau$',
-                               'N':'N',
-                               'n':r'$\rho$',
-                               'R':'R',
-                               'L':'L'}
-
-        self.paramUnit = {'T':'K',
-                          'M':'',
-                          'V':r'$\mathrm{\AA^{%d}}$' % NDIM,
-                          'u':'K',
-                          't':r'$K^{-1}$',
-                          'N':'',
-                          'n':r'$\mathrm{\AA}^{-%d}$' % NDIM,
-                          'R':lengthUnit,
-                          'L':lengthUnit}
-
-        self.paramFormat = {'T':r'%4.2f',
-                            'V':r'%3d',
-                            'M':r'%3d',
-                            'u':r'%+3.1f',
-                            't':r'%5.3f',
-                            'N':'%3d',
-                            'n':r'%f',
-                            'R':r'% 4.1f',
-                            'L':r'%3d'}
-
-        self.paramLongName = {'T':'Temperature  [K]', 
-                              'V':r'Volume  $[\mathrm{\AA^{%d}}]$' % NDIM,
-                              'u':'Chemical Potential  [K]', 
-                              't':'Imaginary Time Step  [1/K]',
-                              'N':'Number of Particles',
-                              'n':r'%s Density  $[\mathrm{\AA}^{-%d}]$' % (densityName[NDIM-1],NDIM),
-                              'R':'Pore Radius  %s ' % lengthTUnit,
-                              'L':'Length %s' % lengthTUnit,
-                              'W':'Virial Window [1/K]',
-                              'M':'Update Length',
-                              'D':r'CoM Delta [$\AA$]'}
-
-        self.estimatorLongName = {'K':'Kinetic Energy [K]',
-                                  'V':'Potential Energy [K]',
-                                  'V_op':'Potential Energy [K]',
-                                  'Vcv':'Potential Energy [K]',
-                                  'E':'Energy [K]',
-                                  'Ecv':'Energy [K]',
-                                  'Eth':'Energy [K]',
-                                  'E_mu':r'$E - \mu N$',
-                                  'K/N':'Kinetic Energy per Particle [K]',
-                                  'V/N':'Potential Energy per Particle [K]',
-                                  'E/N':'Energy per Particle [K]',
-                                  'Ecv/N':'Energy per Particle [K]',
-                                  'Cv':'Specific Heat [K]',
-                                  'P':'Pressure $[\mathrm{K}\mathrm{\AA}^{-%d}]$' % (NDIM),
-                                  'N':'Number of Particles',
-                                  'N^2':r'(Number of Particles)$^2$',
-                                  'density':r'%s Density  $[\mathrm{\AA}^{-%d}]$' % (densityName[NDIM-1],NDIM),
-                                  'diagonal':'Diagonal Fraction',
-                                  'kappa':r'$\rho^2 \kappa [units]$',
-                                  'pair':'Pair Correlation Function [units]',
-                                  'radial':r'Radial Density $[\mathrm{\AA}^{-3}]$',
-                                  'number':'Number Distribution',
-                                  'planedensity':'Density $[\mathrm{\AA}^{-3}]$',
-                                  'obdm':'One Body Density Matrix',
-                                  'rho_s/rho':'Superfluid Fraction',
-                                  'Area_rho_s':'Area Superfluid Fraction',
-                                  'rho_s/rho|Z':r'$\rho_s/\rho_0$',
-                                  'radwind':r'Radial Winding Superfliud Density $[\mathrm{\AA}^{-3}]$',
-                                  'radarea':r'Radial Area Superfliud Density $[\mathrm{\AA}^{-3}]$',
-                                  'x^2':r'$ \langle x^2 \rangle [\AA^2]$'
-                                 }
-
-        self.estimatorShortName = {'K':'K [K]',
-                                  'V':'V [K]',
-                                  'E':'E [K]',
-                                  'Eth':'Eth [K]',
-                                  'Ecv':'Ecv [K]',
-                                  'E_mu':r'$E - \mu N$',
-                                  'K/N':'K/N [K]',
-                                  'V/N':'V/N [K]',
-                                  'E/N':'E/N [K]',
-                                  'N':'N',
-                                  'N^2':r'N$^2$',
-                                  'P':r'$P [\mathrm{K}\mathrm{\AA}^{-%d}]$' % (NDIM),
-                                  'density':r'$\rho [\mathrm{\AA}^{-%d}]$' % (NDIM),
-                                  'diagonal':'D',
-                                  'kappa':r'$\rho^2 \kappa [units]$',
-                                  'pair':'g(r) [units]',
-                                  'radial':r'Radial Density $[\mathrm{\AA}^{-3}]$',
-                                  'number':'Number Distribution',
-                                  'obdm':'One Body Density Matrix',
-                                  'rho_s/rho':r'$\rho_s/\rho$',
-                                  'rho_s/rho|Z':r'$\rho_s/\rho_0$',
-                                  'Area_rho_s':'Area Superfluid Fraction'}
-
-        self.estimatorXLongName = {'number':'Number of Particles',
-                                   'pair':'r  %s' % lengthTUnit,
-                                   'obdm':'r  %s' % lengthTUnit,
-                                   'planedensity': 'Gridbox Number',
-                                   'radial':'r  %s' % lengthTUnit,
-                                   'radwind':'r  %s' % lengthTUnit,
-                                   'radarea':'r  %s' % lengthTUnit}

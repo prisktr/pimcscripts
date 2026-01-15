@@ -10,6 +10,7 @@ import os,sys,glob
 import numpy as np
 import pimcscripts.pimchelp as pimchelp
 import pimcscripts.MCstat as MCstat
+import pimcscripts.description as descrip
 from collections import defaultdict
 import argparse 
 import subprocess
@@ -446,21 +447,12 @@ def main():
     # Form the full output file name
     if args.R is not None:
         outName += f'-R-{args.R:04.1f}'
-    # if args.pimcid is not None:
-    #     outName += f'-{args.pimcid}'
     outName += '.dat'
-
-    # possible types of estimators we may want to reduce
-    est_list = pimc.dataType
-    est_do = {e:False for e in est_list}
-
-    scalar_est_list = ['estimator','energy','virial','super']
-    vector_est_list = [est for est in est_list if est not in scalar_est_list]
 
     # setup the dispatch
     getEst = {}
-    for est in est_list:
-        if est in scalar_est_list:
+    for est in descrip.EST_TYPE:
+        if est in descrip.SCALAR_EST_TYPE:
             getEst[est] = getScalarEst
         elif est == 'isf':
             getEst[est] = getISFEst
@@ -468,21 +460,7 @@ def main():
             getEst[est] = getVectorEst
 
     # setup the x- and y-labels
-    # Note 2025-10-06: ssf and ssfq are duplicated for backwards compatibility
-    axis_label = {'obdm':['r [Å]','n(r)'], 'pair':['r [Å]','g(r)'], 
-                   'radial':['r [Å]','ρ(r)'], 'number':['N','P(N)'],
-                   'radwind':['r [Å]','ρₛ(r)'],'radarea':['r [Å]','ρₛ(r)'],
-                   'planewind':['n','ρₛ(x,y)'],'planearea':['n','ρₛ(x,y)'],
-                   'planedensity':['n','ρ(x,y)'], 'linedensity':['r [Å]','ρ1d(r)'],
-                   'linepotential':['r [Å]','V1d(r)'], 'ssf':['q_index', 'S(q)'],
-                   'ssfq':['q_index', 'S(q)'], 'planeavedensity':['n','ρ(x,y)'],
-                  'lineardensity':['r [Å]','ρ(r)'], 'isf':['τ [1/K]','F(q,τ)'],
-                  'planeaveVext':['n','Vext(x,y)'],'pcycle':['m','P(m)']}
-    
-
-    # there are no labels for scalar estimators
-    for est in scalar_est_list:
-        axis_label[est] = ''
+    axis_label = descrip.get_desc().axisLabel
 
     # if we specify a single estimator, only do that one
     est_do = []
@@ -490,14 +468,17 @@ def main():
         for est in args.estimator:
             est_do.append(est)
     else:
-    # otherwise do any that exist
-        for est in est_list:
+        # otherwise do any that exist
+        for est in descrip.EST_TYPE:
             if pimc.getFileList(est):
                 est_do.append(est)
 
     # perform the reduction
     for est in est_do:
-        ave_est = 'ave' in est
+        # check if we have a cumulative estimator
+        ave_est = est in descrip.CUM_EST_TYPE
+
+        # perform the reduction
         est_return = getEst[est](est,pimc,outName,reduceFlag,axis_label[est],
                                  skip=skip, baseDir=baseDir,
                                  idList=args.pimcid,ave_est=ave_est)
